@@ -1,6 +1,3 @@
-import asyncio
-from app.database import engine
-from sqlalchemy import text
 from ollama import AsyncClient
 
 MODEL_NAME = "nomic-embed-text"
