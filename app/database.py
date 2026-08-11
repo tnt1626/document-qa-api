@@ -1,5 +1,3 @@
-import asyncio
-from sqlalchemy import text
 from typing import AsyncGenerator, Any
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
@@ -13,10 +11,3 @@ SessionLocal = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=F
 async def get_db() -> AsyncGenerator[AsyncSession, Any]:
     async with SessionLocal() as session:
         yield session
-
-async def main():
-    async with engine.connect() as conn:
-        result = await conn.execute(text("SELECT 1"))
-        print("Connected:", result.scalar())
-
-asyncio.run(main())
