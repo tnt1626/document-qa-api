@@ -7,5 +7,7 @@ requires-python = ">=3.13"
 dependencies = [
     "asyncpg>=0.31.0",
     "fastapi>=0.141.1",
+    "pgvector>=0.5.0",
+    "pydantic>=2.13.4",
     "sqlalchemy[asyncio]>=2.0.51",
 ]
