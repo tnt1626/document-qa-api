@@ -13,7 +13,7 @@ CREATE TABLE chunks (
     content TEXT NOT NULL,           
     embedding vector(768),           
     chunk_index INTEGER NOT NULL,    
-    created_at TIMESTAMPTZ DEFAULT now()
+    create_at TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE INDEX ON chunks USING ivfflat (embedding vector_cosine_ops);
