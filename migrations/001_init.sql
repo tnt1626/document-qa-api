@@ -2,7 +2,7 @@ CREATE TABLE documents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     filename TEXT NOT NULL,
     content TEXT NOT NULL,
-    create_at TIMESTAMPTZ DEFAULT now()
+    created_at TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE EXTENSION IF NOT EXISTS vector;
@@ -13,7 +13,7 @@ CREATE TABLE chunks (
     content TEXT NOT NULL,           
     embedding vector(768),           
     chunk_index INTEGER NOT NULL,    
-    create_at TIMESTAMPTZ DEFAULT now()
+    created_at TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE INDEX ON chunks USING ivfflat (embedding vector_cosine_ops);
