@@ -1,8 +1,4 @@
-from ollama import AsyncClient
-
-MODEL_NAME = "nomic-embed-text"
-
-client = AsyncClient()
+from app.services.ollama_client import EMBED_MODEL_NAME, client
 
 async def embed_text(text: str) -> list[float]:
     """Embedd user query using nomic-embed-text via Ollama
@@ -17,9 +13,9 @@ async def embed_text(text: str) -> list[float]:
         list[float]: text input represented in vector
     """
     try:
-        response = await client.embed(model=MODEL_NAME, input=text)
+        response = await client.embed(model=EMBED_MODEL_NAME, input=text)
         return response.embeddings[0]
     except Exception as e:
-        print(f"Error in embedding with {MODEL_NAME}: {e}")
+        print(f"Error in embedding with {EMBED_MODEL_NAME}: {e}")
         raise e
 
