@@ -1,3 +1,4 @@
+import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import APIRouter, File, UploadFile, Depends, HTTPException
@@ -70,3 +71,28 @@ async def list_documents(
 
     items = [DocumentListItem.model_validate(item) for item in items]
     return items
+
+@doc_router.delete("/{id}/", response_model=dict)
+async def delete_document(
+    id: uuid.UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    item = (
+        await db.scalar(
+            select(Document)
+            .where(Document.id == id)
+        )
+    )
+
+    if not item:
+        raise HTTPException(
+            status_code=404,
+            detail="Not found document"
+        )
+
+    await db.delete(item)
+    await db.commit()
+
+    return {
+        "deleted": True
+    }
