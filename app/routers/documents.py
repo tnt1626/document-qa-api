@@ -1,10 +1,11 @@
-from fastapi import APIRouter, File, UploadFile, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.schemas import DocumentUploadResponse
+from fastapi import APIRouter, File, UploadFile, Depends, HTTPException
 from app.database import get_db
 from app.models import Document
+from app.schemas import DocumentUploadResponse, DocumentListItem
 
-doc_router = APIRouter(prefix="documents")
+doc_router = APIRouter(prefix="/documents")
 
 @doc_router.post("/", response_model=DocumentUploadResponse)
 async def upload_document(
@@ -51,3 +52,21 @@ async def upload_document(
         created_at=doc.created_at,
         chunk_count=0  
     )
+
+
+@doc_router.get("/", response_model=list[DocumentListItem])
+async def list_documents(
+    offset: int = 0,
+    limit: int = 10,
+    db: AsyncSession = Depends(get_db)
+):
+    items = (
+        await db.scalars(
+            select(Document)
+            .offset(offset)
+            .limit(limit)
+        )
+    ).all()
+
+    items = [DocumentListItem.model_validate(item) for item in items]
+    return items
