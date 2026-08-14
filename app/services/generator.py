@@ -5,6 +5,12 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 from app.services.retriever import retrieve_vec
 from app.services.ollama_client import GENERATE_MODEL_NAME, client
 
+class OllamaConnectionError(Exception): 
+    pass
+
+class OllamaModelNotFound(Exception): 
+    pass
+
 @retry(
     stop=stop_after_attempt(3), 
     wait=wait_exponential(min=1, max=10),
@@ -18,7 +24,10 @@ async def generate(
 ):
     chunks = await retrieve_vec(question, document_id, top_k, db)
     if not chunks:
-        return ""
+        return {
+            "answer": "",
+            "sources": []
+        }
 
     context = ""
     for chunk in chunks:
@@ -46,12 +55,15 @@ Context:
             ]
         )
 
-        return response.message.content
+        return {
+            "answer": response.message.content,
+            "sources": [chunk.content for chunk in chunks]
+        }
     except ollama.RequestError:
-        raise RuntimeError("Cannot connect to Ollama server")
+        raise OllamaConnectionError()
     except ollama.ResponseError as e:
         if e.status_code == 404:
-            raise RuntimeError(f"Model {GENERATE_MODEL_NAME} not found, run: ollama pull {GENERATE_MODEL_NAME}")
+            raise OllamaModelNotFound()
         raise
     except Exception as e:
         raise RuntimeError(f"Generate failed: {e}")

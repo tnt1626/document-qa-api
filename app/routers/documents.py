@@ -4,7 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import APIRouter, File, UploadFile, Depends, HTTPException
 from app.database import get_db
 from app.models import Document
-from app.schemas import DocumentUploadResponse, DocumentListItem
+from app.services.generator import generate, OllamaConnectionError, OllamaModelNotFound
+from app.schemas import DocumentUploadResponse, DocumentListItem, QueryRequest, QueryResponse
 
 doc_router = APIRouter(prefix="/documents")
 
@@ -54,6 +55,38 @@ async def upload_document(
         chunk_count=0  
     )
 
+
+@doc_router.post("/{document_id}/query", response_model=QueryResponse)
+async def query_document(
+    request: QueryRequest,
+    document_id: uuid.UUID,
+    top_k: int = 5,
+    db: AsyncSession = Depends(get_db),
+):
+    doc = await db.scalar(select(Document).where(Document.id == document_id))
+    if not doc:
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found"
+        )
+
+    try:
+        response = await generate(
+            question=request.question,
+            document_id=document_id,
+            top_k=top_k,
+            db=db
+        )
+
+        return QueryResponse(**response)
+    except OllamaConnectionError:
+        raise HTTPException(status_code=503, detail="AI service unavailable")
+    except OllamaModelNotFound:
+        raise HTTPException(status_code=500, detail="Model not configured")
+
+
+    
+    
 
 @doc_router.get("/", response_model=list[DocumentListItem])
 async def list_documents(
