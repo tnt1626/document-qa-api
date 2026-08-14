@@ -10,7 +10,7 @@ class DocumentListItem(BaseModel):
     created_at: datetime
 
 class DocumentUploadResponse(DocumentListItem):
-    chunk_count: int
+    pass
 
 class QueryRequest(BaseModel):
     question: str
