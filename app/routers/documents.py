@@ -3,10 +3,10 @@ import logging
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import APIRouter, File, UploadFile, Depends, HTTPException, BackgroundTasks
-from app.database import get_db, SessionLocal
 from app.models import Document, Chunk
 from app.services.chunker import chunk_text
 from app.services.embedder import embed_text
+from app.database import get_db, SessionLocal
 from app.services.generator import generate, OllamaConnectionError, OllamaModelNotFound
 from app.schemas import DocumentUploadResponse, DocumentListItem, QueryRequest, QueryResponse
 
@@ -45,6 +45,7 @@ async def upload_document(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ):
+    """Upload a text document and process it for Q&A."""
     if file.content_type != "text/plain":
         raise HTTPException(
             status_code=400,
@@ -87,6 +88,7 @@ async def query_document(
     top_k: int = 5,
     db: AsyncSession = Depends(get_db),
 ):
+    """Query a document using natural language and get an AI-generated answer."""
     doc = await db.scalar(select(Document).where(Document.id == document_id))
     if not doc:
         raise HTTPException(
@@ -115,6 +117,7 @@ async def list_documents(
     limit: int = 10,
     db: AsyncSession = Depends(get_db)
 ):
+    """Query all documents"""
     items = (
         await db.scalars(
             select(Document)
@@ -131,6 +134,7 @@ async def delete_document(
     id: uuid.UUID,
     db: AsyncSession = Depends(get_db)
 ):
+    """Delete document with id if existed"""
     item = (
         await db.scalar(
             select(Document)
