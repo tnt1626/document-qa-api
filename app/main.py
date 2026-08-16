@@ -1,16 +1,25 @@
+import asyncio
+import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from app.routers.documents import doc_router
 from app.services.ollama_client import client, EMBED_MODEL_NAME, GENERATE_MODEL_NAME
 
+logger = logging.getLogger(__name__)
+
 async def pull_ollama_models():
-    await client.pull(EMBED_MODEL_NAME)
-    await client.pull(GENERATE_MODEL_NAME)
+    try:
+        logger.info(f"Starting to pull Ollama models: {EMBED_MODEL_NAME}, {GENERATE_MODEL_NAME}")
+        await client.pull(EMBED_MODEL_NAME)
+        await client.pull(GENERATE_MODEL_NAME)
+        logger.info("Successfully pulled Ollama models.")
+    except Exception as e:
+        logger.error(f"Failed to pull Ollama models: {e}. Application will continue starting, but Ollama might be unavailable.")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await pull_ollama_models()
+    asyncio.create_task(pull_ollama_models())
     yield
 
 app = FastAPI(
