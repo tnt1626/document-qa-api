@@ -75,7 +75,7 @@ async def upload_document(
         overlap=overlap
     )
     return DocumentUploadResponse(
-        document_id=doc.id,
+        id=doc.id,
         filename=doc.filename,
         created_at=doc.created_at,
     )
