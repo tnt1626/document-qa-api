@@ -191,6 +191,141 @@ Response:
 DELETE /documents/{id}/
 ```
 
+## Example curl Commands
+
+Assuming Docker Compose is running locally and the API is exposed at `http://localhost:8000`.
+
+### 1) Upload a text document
+
+```bash
+curl -X POST "http://localhost:8000/documents/?chunk_size=500&overlap=50" \
+  -F "file=@sample.txt;type=text/plain"
+```
+
+Example success response (`200`):
+
+```json
+{
+  "id": "b3f2d9e7-3f2a-4dcb-b3e2-7a92742d2b87",
+  "filename": "sample.txt",
+  "created_at": "2026-08-17T09:31:22.184512"
+}
+```
+
+Example error response when file is not plain text (`400`):
+
+```json
+{
+  "detail": "Only text is supported"
+}
+```
+
+### 2) List documents
+
+```bash
+curl "http://localhost:8000/documents/?offset=0&limit=10"
+```
+
+Example success response (`200`):
+
+```json
+[
+  {
+    "id": "b3f2d9e7-3f2a-4dcb-b3e2-7a92742d2b87",
+    "filename": "sample.txt",
+    "created_at": "2026-08-17T09:31:22.184512"
+  }
+]
+```
+
+### 3) Query a document
+
+Replace `<DOCUMENT_ID>` with a real ID returned from upload/list.
+
+```bash
+curl -X POST "http://localhost:8000/documents/<DOCUMENT_ID>/query?top_k=5" \
+  -H "Content-Type: application/json" \
+  -d '{"question":"What is the main topic of this document?"}'
+```
+
+Example success response (`200`):
+
+```json
+{
+  "answer": "The document is mainly about ...",
+  "sources": [
+    "First relevant chunk text...",
+    "Second relevant chunk text..."
+  ]
+}
+```
+
+Example error response when document does not exist (`404`):
+
+```json
+{
+  "detail": "Document not found"
+}
+```
+
+Example error response when Ollama is unavailable (`503`):
+
+```json
+{
+  "detail": "AI service unavailable"
+}
+```
+
+### 4) Delete a document
+
+```bash
+curl -X DELETE "http://localhost:8000/documents/<DOCUMENT_ID>/"
+```
+
+Example success response (`200`):
+
+```json
+{
+  "deleted": true
+}
+```
+
+Example error response when document does not exist (`404`):
+
+```json
+{
+  "detail": "Not found document"
+}
+```
+
+### Optional: run in sequence with shell variables
+
+```bash
+BASE_URL="http://localhost:8000"
+
+# Upload
+UPLOAD_JSON=$(curl -s -X POST "$BASE_URL/documents/" -F "file=@sample.txt;type=text/plain")
+echo "$UPLOAD_JSON"
+
+# Extract document id (requires jq)
+DOC_ID=$(echo "$UPLOAD_JSON" | jq -r '.id')
+echo "$DOC_ID"
+
+# Query
+curl -s -X POST "$BASE_URL/documents/$DOC_ID/query?top_k=5" \
+  -H "Content-Type: application/json" \
+  -d '{"question":"Summarize this document"}'
+
+# Delete
+curl -s -X DELETE "$BASE_URL/documents/$DOC_ID/"
+```
+
+## Design Decisions
+
+- **pgvector over dedicated vector DB**: Keeps the stack simple with a single database service. Suitable for document-scale workloads without the overhead of managing a separate vector store.
+- **Async processing for embedding**: Document chunking and embedding run as background tasks after upload, so the API responds immediately without blocking on model inference.
+- **Self-hosted LLM via Ollama**: No external API dependency. Models run locally, making the stack fully offline-capable.
+
 ## Docker Notes
 
 The Docker Compose setup includes a named volume for PostgreSQL:
