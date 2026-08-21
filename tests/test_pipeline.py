@@ -1,9 +1,9 @@
 import asyncio
 from sqlalchemy import text
 from app.database import engine, SessionLocal
-from app.services.embedder import embed_text
-from app.services.chunker import chunk_text
-from app.services.generator import generate
+from app.services.rag.embedder import embed_text
+from app.services.rag.chunker import chunk_text
+from app.services.rag.generator import generate
 
 
 async def main():
