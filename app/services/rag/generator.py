@@ -2,7 +2,7 @@ import uuid
 import ollama
 from sqlalchemy.ext.asyncio import AsyncSession
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-from app.services.retriever import retrieve_vec
+from app.services.rag.retriever import retrieve_vec
 from app.services.ollama_client import GENERATE_MODEL_NAME, client
 
 class OllamaConnectionError(Exception): 

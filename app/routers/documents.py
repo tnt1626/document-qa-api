@@ -4,10 +4,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import APIRouter, File, UploadFile, Depends, HTTPException, BackgroundTasks
 from app.models import Document, Chunk
-from app.services.chunker import chunk_text
-from app.services.embedder import embed_text
+from app.services.rag.chunker import chunk_text
+from app.services.rag.embedder import embed_text
 from app.database import get_db, SessionLocal
-from app.services.generator import generate, OllamaConnectionError, OllamaModelNotFound
+from app.services.rag.generator import generate, OllamaConnectionError, OllamaModelNotFound
 from app.schemas import DocumentUploadResponse, DocumentListItem, QueryRequest, QueryResponse
 
 logger = logging.getLogger(__name__)
