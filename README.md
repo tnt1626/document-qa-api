@@ -62,6 +62,32 @@ The application uses a simple RAG (Retrieval-Augmented Generation) flow:
 5. When a user asks a question, similar chunks are retrieved by vector similarity.
 6. The relevant context is sent to an Ollama chat model to generate the final answer.
 
+## Future Agentic Roadmap
+
+To transition this service into an **Agentic RAG System**, the development direction is structured as follows:
+
+1. **Deterministic REST APIs:** Keep standard endpoints for data management (e.g., upload, list, delete documents) to ensure reliable and predictable administration.
+2. **Unified Chat Agent Endpoint (`POST /chat`):** Consolidate query and QA endpoints into a single conversational interface powered by a reasoning LLM.
+3. **Services as Skills/Tools:** Wrap core services (vector retrieval, document listing, full-text reading) as tools that the agent can dynamically invoke during planning loops.
+4. **Context & Long-term Memory:** Integrate short-term conversation context with long-term semantic memory stored in the PostgreSQL vector database.
+
+### Agentic Flow Diagram
+
+```mermaid
+graph TD
+    User([User / Frontend]) -->|1. Ask question| API[POST /chat]
+    API -->|2. Invoke| Agent[run_agent]
+    Agent -->|3. Call LLM for planning| LLM[LLM Brain]
+    LLM -->|4. Request tool call| Agent
+    Agent -->|5. Execute| Tool[execute_tool]
+    Tool -->|6. Query| DB[(Database / Vector DB)]
+    DB -->|7. Return raw data| Tool
+    Tool -->|8. Format to text| Agent
+    Agent -->|9. Feed observation| LLM
+    LLM -->|10. Final answer| Agent
+    Agent -->|11. Return response| User
+```
+
 ## Default Models
 
 The app uses the following Ollama models:
