@@ -1,7 +1,7 @@
 import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.services.embedder import embed_text
+from app.services.rag.embedder import embed_text
 from app.models import Chunk
 
 async def retrieve_vec(question: str, document_id: uuid.UUID, top_k: int, db: AsyncSession):

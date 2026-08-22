@@ -7,10 +7,12 @@ requires-python = ">=3.13"
 dependencies = [
     "asyncpg>=0.31.0",
     "fastapi>=0.141.1",
+    "groq>=1.6.0",
     "numpy>=2.5.2",
     "ollama>=0.6.2",
     "pgvector>=0.5.0",
     "pydantic>=2.13.4",
+    "python-dotenv>=1.2.3",
     "python-multipart>=0.0.32",
     "sqlalchemy[asyncio]>=2.0.51",
     "tenacity>=9.1.4",

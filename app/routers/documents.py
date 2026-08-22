@@ -4,10 +4,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import APIRouter, File, UploadFile, Depends, HTTPException, BackgroundTasks
 from app.models import Document, Chunk
-from app.services.chunker import chunk_text
-from app.services.embedder import embed_text
 from app.database import get_db, SessionLocal
-from app.services.generator import generate, OllamaConnectionError, OllamaModelNotFound
+from app.services.rag.chunker import chunk_text
+from app.services.rag.embedder import embed_text
+from app.services.rag.generator import generate, OllamaConnectionError, OllamaModelNotFound
 from app.schemas import DocumentUploadResponse, DocumentListItem, QueryRequest, QueryResponse
 
 logger = logging.getLogger(__name__)
@@ -63,8 +63,10 @@ async def upload_document(
         db.add(doc)
         await db.commit()
         await db.refresh(doc)
+        logger.info(f"Saved metadata for document '{file.filename}' (ID: {doc.id}). Starting background chunking & embedding.")
     except Exception:
         await db.rollback()
+        logger.exception(f"Failed to save metadata for document '{file.filename}'")
         raise HTTPException(status_code=500, detail="Failed to save document")
 
     background_tasks.add_task(
@@ -89,6 +91,7 @@ async def query_document(
     db: AsyncSession = Depends(get_db),
 ):
     """Query a document using natural language and get an AI-generated answer."""
+    logger.info(f"Querying document {document_id} with question: '{request.question}'")
     doc = await db.scalar(select(Document).where(Document.id == document_id))
     if not doc:
         raise HTTPException(
@@ -103,9 +106,11 @@ async def query_document(
             top_k=top_k,
             db=db
         )
+        logger.info(f"Successfully generated answer for document {document_id}")
 
         return QueryResponse(**response)
-    except OllamaConnectionError:
+    except OllamaConnectionError as e:
+        logger.error(f"Ollama connection error for document {document_id}: {e}")
         raise HTTPException(status_code=503, detail="AI service unavailable")
     except OllamaModelNotFound:
         raise HTTPException(status_code=500, detail="Model not configured")
@@ -151,6 +156,7 @@ async def delete_document(
     await db.delete(item)
     await db.commit()
 
+    logger.info(f"Document with ID {id} has been permanently deleted from database.")
     return {
         "deleted": True
     }

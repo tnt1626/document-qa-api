@@ -18,3 +18,9 @@ class QueryRequest(BaseModel):
 class QueryResponse(BaseModel):
     answer: str
     sources: list[str]
+
+class AgentQuery(QueryRequest):
+    document_id: uuid.UUID | None = None
+
+class AgentResponse(BaseModel):
+    answer: str 
