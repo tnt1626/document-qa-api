@@ -41,7 +41,7 @@ TOOLS = [
                         "default": 5,
                     },
                 },
-                "required": ["document_id", "query"],
+                "required": ["query"],
             },
         },
     },
@@ -106,26 +106,41 @@ async def execute_tool(
         document_id_str = tool_input["document_id"]
         query = tool_input["query"]
         top_k = tool_input.get("top_k", 5)
+
+        doc_uuid = None
+        doc = None
+
+        if document_id_str:
+            try:
+                doc_uuid = uuid.UUID(document_id_str)
+            except ValueError:
+                return f"Error: '{document_id_str}' is not a valid UUID."
  
-        try:
-            doc_uuid = uuid.UUID(document_id_str)
-        except ValueError:
-            return f"Error: '{document_id_str}' is not a valid UUID."
- 
-        # Check if the document exists
-        doc = await db.scalar(select(Document).where(Document.id == doc_uuid))
-        if not doc:
-            return f"Error: Document with ID '{document_id_str}' not found."
+            # Check if the document exists
+            doc = await db.scalar(select(Document).where(Document.id == doc_uuid))
+            if not doc:
+                return f"Error: Document with ID '{document_id_str}' not found."
  
         # Use retrieve_vec() available in the repository
         chunks: list[Chunk] = await retrieve_vec(query, doc_uuid, top_k, db)
  
         if not chunks:
             return "No relevant text chunks found for this query."
- 
-        result_lines = [f"Found {len(chunks)} relevant chunks in '{doc.filename}':\n"]
-        for i, chunk in enumerate(chunks, 1):
-            result_lines.append(f"[Chunk {i}]\n{chunk.content}\n")
+
+        result_lines = []
+
+        if doc_uuid:
+            result_lines.append(f"Found {len(chunks)} relevant chunks in '{doc.filename}':\n")
+            for i, chunk in enumerate(chunks, 1):
+                result_lines.append(f"[Chunk {i}]\n{chunk.content}\n")
+        else:
+            result_lines.append(f"Found {len(chunks)} relevant chunks across all documents:\n")
+            for i, chunk in enumerate(chunks, 1):
+                filename = await db.scalar(select(Document.filename).where(Document.id == chunk.document_id))
+                result_lines.append(
+                    f"[Chunk {i}] (From Document: '{filename}' | ID: {chunk.document_id})\n"
+                    f"{chunk.content}\n"
+                )
  
         return "\n".join(result_lines)
  

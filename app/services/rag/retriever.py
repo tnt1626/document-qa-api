@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.rag.embedder import embed_text
 from app.models import Chunk
 
-async def retrieve_vec(question: str, document_id: uuid.UUID, top_k: int, db: AsyncSession):
+async def retrieve_vec(question: str, document_id: uuid.UUID | None, top_k: int, db: AsyncSession):
     """
     Retrieve document by user question
     Args:
@@ -15,10 +15,13 @@ async def retrieve_vec(question: str, document_id: uuid.UUID, top_k: int, db: As
 
     """
     embed_vec = await embed_text(question)
+    selected_obj = select(Chunk)
+    if document_id:
+        selected_obj = selected_obj.where(Chunk.document_id == document_id)
+
     chunks = (
         await db.scalars(
-            select(Chunk)
-            .where(Chunk.document_id == document_id)
+            selected_obj
             .order_by(
                 Chunk.embedding.cosine_distance(embed_vec)
             )
