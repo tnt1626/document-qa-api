@@ -217,6 +217,43 @@ Response:
 DELETE /documents/{id}/
 ```
 
+### Chat with the Agent
+
+```http
+POST /agent/query
+```
+
+Request body:
+
+```json
+{
+  "question": "What is my name?",
+  "document_id": "b3f2d9e7-3f2a-4dcb-b3e2-7a92742d2b87",
+  "chat_history": [
+    {
+      "role": "user",
+      "content": "My name is Pintee."
+    },
+    {
+      "role": "assistant",
+      "content": "Nice to meet you, Pintee! How can I help you today?"
+    }
+  ]
+}
+```
+
+- `question` (required): The current message or question from the user.
+- `document_id` (optional): UUID of a specific document to restrict vector search. If omitted, search queries all documents.
+- `chat_history` (optional): List of past conversational messages (only supports `"user"` and `"assistant"` roles) to maintain context.
+
+Response:
+
+```json
+{
+  "answer": "Your name is Pintee."
+}
+```
+
 ## Example curl Commands
 
 Assuming Docker Compose is running locally and the API is exposed at `http://localhost:8000`.

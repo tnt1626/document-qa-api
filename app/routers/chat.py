@@ -19,6 +19,7 @@ async def chat(
     try:
         message = await run_agent(
             question=payload.question,
+            chat_history=payload.chat_history,
             db=db,
             document_id=payload.document_id,
             max_loops=MAX_LOOPS

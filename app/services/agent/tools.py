@@ -6,6 +6,7 @@ from groq import AsyncGroq
 from sqlalchemy import select
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.schemas import ChatMessage
 from app.database import SessionLocal
 from app.models import Chunk, Document
 from app.services.rag.retriever import retrieve_vec
@@ -192,10 +193,23 @@ async def execute_tool(
 
 async def run_agent(
     question: str,
+    chat_history: list[ChatMessage] | None = None,
     db: AsyncSession | None = None,
     document_id: uuid.UUID | None = None,
     max_loops: int = 8
-):
+) -> str:
+    """_summary_
+
+    Args:
+        question (str): the query of user
+        chat_history (list[ChatMessage] | None, optional): all messages before user's query. Defaults to None.
+        db (AsyncSession | None, optional): database session. Defaults to None.
+        document_id (uuid.UUID | None, optional): the if of document that user want to query. Defaults to None.
+        max_loops (int, optional): number of interation that agent try to execute tools. Defaults to 8.
+
+    Returns:
+        str: response of agent in text
+    """
     system_parts = [
         "You are an intelligent assistant that can search for and read document content.",
         "When the user asks about document content, use the tool to search before answering.",
@@ -211,11 +225,15 @@ async def run_agent(
     
     system_prompt = "\n".join(system_parts)
 
-    # Context Window
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": question}
     ]
+
+    if chat_history:
+        for chat in chat_history:
+            messages.append(chat.model_dump())
+
+    messages.append({"role": "user", "content": question})
 
     loops = 0
     while loops < max_loops:
