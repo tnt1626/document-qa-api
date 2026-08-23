@@ -25,7 +25,7 @@ async def generate(
     chunks = await retrieve_vec(question, document_id, top_k, db)
     if not chunks:
         return {
-            "answer": "",
+            "answer": "I don't know based on the provided document.",
             "sources": []
         }
 
