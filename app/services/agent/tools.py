@@ -6,7 +6,7 @@ from groq import AsyncGroq
 from sqlalchemy import select
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.schemas import ChatMessage
+from app.schemas import ChatMessage, AgentResponse, ThoughtStep, ToolCallDetail  
 from app.database import SessionLocal
 from app.models import Chunk, Document
 from app.services.rag.retriever import retrieve_vec
@@ -197,7 +197,7 @@ async def run_agent(
     db: AsyncSession | None = None,
     document_id: uuid.UUID | None = None,
     max_loops: int = 8
-) -> str:
+) -> AgentResponse:
     """_summary_
 
     Args:
@@ -235,8 +235,11 @@ async def run_agent(
 
     messages.append({"role": "user", "content": question})
 
+    thought_steps: list[ThoughtStep] = []
+
     loops = 0
     while loops < max_loops:
+        tool_calls: list[ToolCallDetail] = []
         try:
             response = await client.chat.completions.create(
                 model="qwen/qwen3.6-27b",
@@ -249,7 +252,10 @@ async def run_agent(
         messages.append(response.choices[0].message)
 
         if not response.choices[0].message.tool_calls:
-            return response.choices[0].message.content
+            return AgentResponse(
+                answer=response.choices[0].message.content or "",
+                thought_steps=thought_steps
+            )
 
         for tool_call in response.choices[0].message.tool_calls:
             tool_name = tool_call.function.name
@@ -261,15 +267,31 @@ async def run_agent(
                 db=db
             )
 
+            tool_calls.append(ToolCallDetail(
+                id=tool_call.id,
+                name=tool_name,
+                arguments=tool_input,
+                result=str(result)
+            ))
+
             messages.append({
                 "role": "tool",
                 "tool_call_id": tool_call.id,
                 "content": str(result)
             })
 
+        thought_steps.append(ThoughtStep(
+            loop_index=loops,
+            thought=response.choices[0].message.content,
+            tool_calls=tool_calls
+        ))
+
         loops += 1
 
-    return f"No answer from Agent with tool with {loops} loops\n"
+    return AgentResponse(
+        answer=f"No answer from Agent with tool with {loops} loops\n",
+        thought_steps=thought_steps
+    )
 
 async def main():
     async with SessionLocal() as session:

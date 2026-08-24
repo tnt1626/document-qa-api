@@ -25,7 +25,7 @@ async def chat(
             max_loops=MAX_LOOPS
         )
 
-        return {"answer": message}
+        return message
 
     except RuntimeError as e:
         logger.error(f"Agent failed to run: {e}")

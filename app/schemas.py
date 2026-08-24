@@ -20,6 +20,17 @@ class QueryResponse(BaseModel):
     answer: str
     sources: list[str]
 
+class ToolCallDetail(BaseModel):
+    id: str
+    name: str
+    arguments: dict
+    result: str | None = None
+
+class ThoughtStep(BaseModel):
+    loop_index: int
+    thought: str | None = None
+    tool_calls: list[ToolCallDetail] = []
+
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str
@@ -30,3 +41,4 @@ class AgentQuery(QueryRequest):
 
 class AgentResponse(BaseModel):
     answer: str 
+    thought_steps: list[ThoughtStep] = []
