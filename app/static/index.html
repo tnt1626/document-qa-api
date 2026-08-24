@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Q&A AI Agent Dashboard</title>
+    <link rel="stylesheet" href="/ui/style.css">
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Marked Markdown Parser CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <header>
+        <div class="logo-container">
+            <i data-lucide="bot" class="logo-icon"></i>
+            <h1>Document Q&A AI Agent</h1>
+        </div>
+        <div class="status-badge">
+            <span class="status-indicator"></span>
+            <span>Ollama & Groq Online</span>
+        </div>
+    </header>
+
+    <main class="dashboard">
+        <!-- Sidebar: Document Manager -->
+        <aside class="sidebar">
+            <div>
+                <h2 class="section-title"><i data-lucide="file-up"></i> Upload Document</h2>
+                <div class="upload-container" id="upload-dropzone">
+                    <i data-lucide="cloud-upload" class="upload-icon"></i>
+                    <p>Drag & Drop file here</p>
+                    <span>Only .txt files supported</span>
+                    <input type="file" id="file-input" style="display: none;" accept=".txt">
+                </div>
+            </div>
+
+            <div style="flex: 1; display: flex; flex-direction: column;">
+                <h2 class="section-title"><i data-lucide="files"></i> Knowledge Base (<span id="doc-count">0</span>)</h2>
+                <div class="document-list" id="doc-list">
+                    <!-- Dynamic Document items will load here -->
+                    <div style="text-align: center; padding: 2rem; color: var(--text-secondary); font-size: 0.85rem;">
+                        No documents uploaded yet.
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Chat Console -->
+        <section class="chat-container">
+            <div class="messages-box" id="chat-box">
+                <!-- Initial Welcome Message -->
+                <div class="message assistant">
+                    <div class="message-bubble">
+                        Hello! I am your intelligent document assistant. Upload a text file on the left side to get started, or select a document to query. You can ask me to search specific documents or search globally across all uploaded knowledge.
+                    </div>
+                    <div class="message-meta">Agent • Just now</div>
+                </div>
+            </div>
+
+            <!-- Input Panel -->
+            <div class="input-panel">
+                <div class="input-options">
+                    <div class="option-select-container">
+                        <label for="doc-select">Scope:</label>
+                        <select id="doc-select">
+                            <option value="">🔍 Search All Documents</option>
+                        </select>
+                    </div>
+                    <button class="clear-btn" id="clear-chat-btn">
+                        <i data-lucide="trash-2"></i> Clear Conversation
+                    </button>
+                </div>
+                <div class="input-box-container">
+                    <input type="text" class="input-box" id="user-input" placeholder="Ask your document a question..." autocomplete="off">
+                    <button class="send-btn" id="send-btn">
+                        <i data-lucide="send"></i>
+                    </button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Toast notifications -->
+    <div class="toast" id="toast-notification"></div>
+
+    <script src="/ui/app.js"></script>
+</body>
+</html>
