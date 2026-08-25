@@ -26,6 +26,7 @@ async def generate(
     if not chunks:
         return {
             "answer": "I don't know based on the provided document.",
+            "token": 0,
             "sources": []
         }
 
@@ -57,6 +58,7 @@ Context:
 
         return {
             "answer": response.message.content,
+            "token": response.prompt_eval_count + response.eval_count,
             "sources": [chunk.content for chunk in chunks]
         }
     except ollama.RequestError:

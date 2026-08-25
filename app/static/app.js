@@ -318,6 +318,7 @@ function appendMessage(text, role, thoughtSteps = []) {
 // Render Collapsible Accordion for Thought Traces
 function renderThoughtSteps(steps) {
     const accordionId = `accordion-${Math.random().toString(36).substr(2, 9)}`;
+    const totalTokens = steps.reduce((sum, step) => sum + (step.token || 0), 0);
     let stepsHtml = '';
 
     steps.forEach(step => {
@@ -337,7 +338,7 @@ function renderThoughtSteps(steps) {
 
         stepsHtml += `
             <div class="thought-step">
-                <div class="step-label">▶ Loop Step ${step.loop_index + 1}</div>
+                <div class="step-label">▶ Loop Step ${step.loop_index + 1} (${step.token || 0} tokens)</div>
                 ${step.thought ? `<div class="step-thought">${escapeHtml(step.thought)}</div>` : ''}
                 ${toolCallsHtml}
             </div>
@@ -347,7 +348,7 @@ function renderThoughtSteps(steps) {
     return `
         <div class="thought-accordion" id="${accordionId}">
             <div class="thought-header" onclick="toggleAccordion('${accordionId}')">
-                <span><i data-lucide="eye" style="width: 14px; height: 14px; display: inline; vertical-align: middle; margin-right: 4px;"></i> View Agent Reasoning (${steps.length} steps)</span>
+                <span><i data-lucide="eye" style="width: 14px; height: 14px; display: inline; vertical-align: middle; margin-right: 4px;"></i> View Agent Reasoning (${steps.length} steps | ${totalTokens} tokens)</span>
                 <i data-lucide="chevron-down" class="thought-header-icon" style="width: 14px; height: 14px;"></i>
             </div>
             <div class="thought-content">

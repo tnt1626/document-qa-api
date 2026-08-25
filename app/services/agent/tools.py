@@ -252,6 +252,12 @@ async def run_agent(
         messages.append(response.choices[0].message)
 
         if not response.choices[0].message.tool_calls:
+            thought_steps.append(ThoughtStep(
+                loop_index=loops,
+                token=response.usage.total_tokens,
+                thought=response.choices[0].message.content,
+                tool_calls=tool_calls
+            ))
             return AgentResponse(
                 answer=response.choices[0].message.content or "",
                 thought_steps=thought_steps
@@ -282,6 +288,7 @@ async def run_agent(
 
         thought_steps.append(ThoughtStep(
             loop_index=loops,
+            token=response.usage.total_tokens,
             thought=response.choices[0].message.content,
             tool_calls=tool_calls
         ))
