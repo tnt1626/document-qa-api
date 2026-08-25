@@ -181,8 +181,8 @@ async def execute_tool(
  
         content = doc.content
         # Limit to avoid context window overflow
-        if len(content) > 10_000:
-            content = content[:10_000] + "\n\n[... content truncated due to length ...]"
+        if len(content) > 5_000:
+            content = content[:5_000] + "\n\n[... content truncated due to length ...]"
  
         return f"Full content of '{doc.filename}':\n\n{content}"
  
