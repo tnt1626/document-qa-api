@@ -1,437 +1,48 @@
-# Document Q&A API
+# Document Q&A AI Agent
 
-A lightweight FastAPI service for uploading text documents, chunking them, embedding the content with Ollama, storing vector data in PostgreSQL with pgvector, and answering natural-language questions from the uploaded document set.
+Imagine you have a private library of documents and a blind librarian named **Agent**. The books are your uploaded text files, stored in a PostgreSQL database. The librarian cannot read the books directly, but is equipped with **Skills (Tools)**: they can search the catalog of files, perform semantic page-by-page index searches (RAG vector retrieval via Ollama), or read a short booklet in full.
 
-## Features
+When you ask a question, the librarian doesn't just guess. They reason step-by-step:
+> *"First, let me list the documents. Ah, the user is asking about hotel data. Let me search the hotel document for relevant paragraphs. I found 3 matching chunks. Now, based only on these paragraphs, here is the answer."*
 
-- Upload plain text documents via API
-- Split documents into chunks with configurable chunk size and overlap
-- Generate embeddings using Ollama models
-- Store documents and vectors in PostgreSQL with pgvector
-- Retrieve relevant chunks for a question
-- Generate answer from the retrieved context using a local LLM
-- Run the stack with Docker Compose
+This repository is that librarian: a lightweight FastAPI service powered by a reasoning LLM Agent that dynamically queries and reads your local documents to answer questions with transparency (showing its thought traces) and trust (highlighting exact sources).
 
-## Tech Stack
+---
 
-- Python 3.13
-- FastAPI
-- SQLAlchemy + asyncpg
-- PostgreSQL + pgvector
-- Ollama
-- Docker / Docker Compose
+## The Agent's Skills
 
-## Project Structure
+* **Document Management:** Standard REST APIs (`POST /documents/`, `GET /documents/`, `DELETE /documents/`) to upload and index files.
+* **Conversational Agent (`POST /agent/query`):** A unified chat endpoint driven by the Agent's reasoning loop.
+  * **Short-Term Memory:** Accepts `chat_history` to maintain context across follow-up questions.
+  * **Scope Selection:** Pass `document_id` to focus the search on a specific file, or omit it for a global cross-document search.
 
-```text
-.
-├── app/
-│   ├── __init__.py
-│   ├── database.py
-│   ├── main.py
-│   ├── models.py
-│   ├── schemas.py
-│   ├── routers/
-│   │   └── documents.py
-│   └── services/
-│       ├── chunker.py
-│       ├── embedder.py
-│       ├── generator.py
-│       ├── ollama_client.py
-│       └── retriever.py
-├── migrations/
-│   └── 001_init.sql
-├── tests/
-│   └── test_pipeline.py
-├── .dockerignore
-├── docker-compose.yml
-├── Dockerfile
-├── pyproject.toml
-├── README.md
-└── uv.lock
+---
+
+## Quick Start
+
+### 1. Run the Database
+Launch the PostgreSQL database with `pgvector` extension:
+```bash
+docker compose up -d db
 ```
 
-## Architecture
-
-The application uses a simple RAG (Retrieval-Augmented Generation) flow:
-
-1. A document is uploaded through the API.
-2. The content is split into chunks.
-3. Each chunk is embedded with an Ollama embedding model.
-4. The embeddings are stored in PostgreSQL with pgvector.
-5. When a user asks a question, similar chunks are retrieved by vector similarity.
-6. The relevant context is sent to an Ollama chat model to generate the final answer.
-
-## Future Agentic Roadmap
-
-To transition this service into an **Agentic RAG System**, the development direction is structured as follows:
-
-1. **Deterministic REST APIs:** Keep standard endpoints for data management (e.g., upload, list, delete documents) to ensure reliable and predictable administration.
-2. **Unified Chat Agent Endpoint (`POST /chat`):** Consolidate query and QA endpoints into a single conversational interface powered by a reasoning LLM.
-3. **Services as Skills/Tools:** Wrap core services (vector retrieval, document listing, full-text reading) as tools that the agent can dynamically invoke during planning loops.
-4. **Context & Long-term Memory:** Integrate short-term conversation context with long-term semantic memory stored in the PostgreSQL vector database.
-
-### Agentic Flow Diagram
-
-```mermaid
-graph TD
-    User([User / Frontend]) -->|1. Ask question| API[POST /chat]
-    API -->|2. Invoke| Agent[run_agent]
-    Agent -->|3. Call LLM for planning| LLM[LLM Brain]
-    LLM -->|4. Request tool call| Agent
-    Agent -->|5. Execute| Tool[execute_tool]
-    Tool -->|6. Query| DB[(Database / Vector DB)]
-    DB -->|7. Return raw data| Tool
-    Tool -->|8. Format to text| Agent
-    Agent -->|9. Feed observation| LLM
-    LLM -->|10. Final answer| Agent
-    Agent -->|11. Return response| User
-```
-
-## Default Models
-
-The app uses the following Ollama models:
-
-- Embedding model: `nomic-embed-text`
-- Generation model: `qwen2.5:1.5b`
-
-These are configured in `app/services/ollama_client.py` and can be adjusted if needed.
-
-## Environment Variables
-
-The main runtime settings are provided by Docker Compose:
-
-- `DATABASE_URL`: PostgreSQL connection string
-- `OLLAMA_BASE_URL`: URL of the Ollama service
-
-Example values from the default setup:
-
+### 2. Configure Environment
+Create a `.env` file in the root directory:
 ```env
-DATABASE_URL=postgresql+asyncpg://user:password@db:5432/docqa
-OLLAMA_BASE_URL=http://ollama:11434
+DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/docqa
+GROQ_API_KEY=your_groq_api_key_here
 ```
 
-## Local Development
-
-### Prerequisites
-
-- Docker
-- Docker Compose
-- Python 3.13
-- uv (recommended for dependency management)
-
-### Install dependencies
-
+### 3. Run the Application
+Install dependencies and start the FastAPI server:
 ```bash
 uv sync
+uv run uvicorn app.main:app --reload
 ```
 
-### Run the app locally
-
-```bash
-uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-The API will be available at:
-
+### 4. Open the Dashboard
+Access the premium conversational UI directly in your browser:
 ```text
-http://localhost:8000
+http://localhost:8000/ui
 ```
-
-## Run with Docker Compose
-
-From the project root:
-
-```bash
-docker compose up --build
-```
-
-This starts:
-
-- the FastAPI app on port `8000`
-- PostgreSQL on port `5432`
-- Ollama with a persistent volume for downloaded models
-
-To stop the stack:
-
-```bash
-docker compose down
-```
-
-## API Endpoints
-
-### Upload a document
-
-```http
-POST /documents/
-```
-
-Request:
-- form-data file field named `file`
-- optional query params:
-  - `chunk_size` (default: `500`)
-  - `overlap` (default: `50`)
-
-Response:
-- document metadata including id, filename, and created_at
-
-### List documents
-
-```http
-GET /documents/
-```
-
-Optional query params:
-- `offset`
-- `limit`
-
-### Query a document
-
-```http
-POST /documents/{document_id}/query
-```
-
-Request body:
-
-```json
-{
-  "question": "What is the main topic of this document?"
-}
-```
-
-Optional query param:
-- `top_k` (default: `5`)
-
-Response:
-
-```json
-{
-  "answer": "...",
-  "sources": ["...", "..."]
-}
-```
-
-### Delete a document
-
-```http
-DELETE /documents/{id}/
-```
-
-### Chat with the Agent
-
-```http
-POST /agent/query
-```
-
-Request body:
-
-```json
-{
-  "question": "What is my name?",
-  "document_id": "b3f2d9e7-3f2a-4dcb-b3e2-7a92742d2b87",
-  "chat_history": [
-    {
-      "role": "user",
-      "content": "My name is Pintee."
-    },
-    {
-      "role": "assistant",
-      "content": "Nice to meet you, Pintee! How can I help you today?"
-    }
-  ]
-}
-```
-
-- `question` (required): The current message or question from the user.
-- `document_id` (optional): UUID of a specific document to restrict vector search. If omitted, search queries all documents.
-- `chat_history` (optional): List of past conversational messages (only supports `"user"` and `"assistant"` roles) to maintain context.
-
-Response:
-
-```json
-{
-  "answer": "Your name is Pintee."
-}
-```
-
-## Example curl Commands
-
-Assuming Docker Compose is running locally and the API is exposed at `http://localhost:8000`.
-
-### 1) Upload a text document
-
-```bash
-curl -X POST "http://localhost:8000/documents/?chunk_size=500&overlap=50" \
-  -F "file=@sample.txt;type=text/plain"
-```
-
-Example success response (`200`):
-
-```json
-{
-  "id": "b3f2d9e7-3f2a-4dcb-b3e2-7a92742d2b87",
-  "filename": "sample.txt",
-  "created_at": "2026-08-17T09:31:22.184512"
-}
-```
-
-Example error response when file is not plain text (`400`):
-
-```json
-{
-  "detail": "Only text is supported"
-}
-```
-
-### 2) List documents
-
-```bash
-curl "http://localhost:8000/documents/?offset=0&limit=10"
-```
-
-Example success response (`200`):
-
-```json
-[
-  {
-    "id": "b3f2d9e7-3f2a-4dcb-b3e2-7a92742d2b87",
-    "filename": "sample.txt",
-    "created_at": "2026-08-17T09:31:22.184512"
-  }
-]
-```
-
-### 3) Query a document
-
-Replace `<DOCUMENT_ID>` with a real ID returned from upload/list.
-
-```bash
-curl -X POST "http://localhost:8000/documents/<DOCUMENT_ID>/query?top_k=5" \
-  -H "Content-Type: application/json" \
-  -d '{"question":"What is the main topic of this document?"}'
-```
-
-Example success response (`200`):
-
-```json
-{
-  "answer": "The document is mainly about ...",
-  "sources": [
-    "First relevant chunk text...",
-    "Second relevant chunk text..."
-  ]
-}
-```
-
-Example error response when document does not exist (`404`):
-
-```json
-{
-  "detail": "Document not found"
-}
-```
-
-Example error response when Ollama is unavailable (`503`):
-
-```json
-{
-  "detail": "AI service unavailable"
-}
-```
-
-### 4) Delete a document
-
-```bash
-curl -X DELETE "http://localhost:8000/documents/<DOCUMENT_ID>/"
-```
-
-Example success response (`200`):
-
-```json
-{
-  "deleted": true
-}
-```
-
-Example error response when document does not exist (`404`):
-
-```json
-{
-  "detail": "Not found document"
-}
-```
-
-### Optional: run in sequence with shell variables
-
-```bash
-BASE_URL="http://localhost:8000"
-
-# Upload
-UPLOAD_JSON=$(curl -s -X POST "$BASE_URL/documents/" -F "file=@sample.txt;type=text/plain")
-echo "$UPLOAD_JSON"
-
-# Extract document id (requires jq)
-DOC_ID=$(echo "$UPLOAD_JSON" | jq -r '.id')
-echo "$DOC_ID"
-
-# Query
-curl -s -X POST "$BASE_URL/documents/$DOC_ID/query?top_k=5" \
-  -H "Content-Type: application/json" \
-  -d '{"question":"Summarize this document"}'
-
-# Delete
-curl -s -X DELETE "$BASE_URL/documents/$DOC_ID/"
-```
-
-## Design Decisions
-
-- **pgvector over dedicated vector DB**: Keeps the stack simple with a single database service. Suitable for document-scale workloads without the overhead of managing a separate vector store.
-- **Async processing for embedding**: Document chunking and embedding run as background tasks after upload, so the API responds immediately without blocking on model inference.
-- **Self-hosted LLM via Ollama**: No external API dependency. Models run locally, making the stack fully offline-capable.
-
-## Docker Notes
-
-The Docker Compose setup includes a named volume for PostgreSQL:
-
-```yaml
-pgdata:/var/lib/postgresql/data
-```
-
-And a named volume for Ollama models:
-
-```yaml
-ollama_data:/root/.ollama
-```
-
-This is intended to persist downloaded models across container restarts. If a model is missing after a restart, check whether the Ollama volume is mounted correctly and whether the container is pointing to the expected model directory.
-
-## Example: Pull Models Manually
-
-If the models are not already present in Ollama, run:
-
-```bash
-docker compose exec ollama ollama pull nomic-embed-text
-docker compose exec ollama ollama pull qwen2.5:1.5b
-```
-
-## Troubleshooting
-
-### API cannot connect to PostgreSQL
-
-Check that the database container is healthy and that `DATABASE_URL` matches the service name `db`.
-
-### Ollama model not found
-
-Verify the model has been downloaded and exists in the Ollama container. Then retry the request.
-
-### Document upload fails
-
-The app currently accepts only plain text files (`text/plain`).
-
-## License
-
-This project is currently distributed without a formal license declaration.
-
-## Notes
-
-This project is a small retrieval-based document question answering service intended for local or development use. It is suitable for experimenting with embedding + vector search + LLM-based answer generation using local models.
+Drag-and-drop your `.txt` files in the sidebar and start chatting with the Agent!
