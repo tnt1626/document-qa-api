@@ -181,8 +181,12 @@ uploadDropzone.ondrop = (e) => {
 
 async function handleFileUpload(file) {
     if (!file) return;
-    if (!file.name.endsWith('.txt')) {
-        showToast("Only plain text (.txt) files are supported!", "error");
+    
+    const ALLOWED_EXTENSIONS = ['.txt', '.md', '.html', '.css', '.csv', '.xml', '.json'];
+    const extension = '.' + file.name.split('.').pop().toLowerCase();
+    
+    if (!ALLOWED_EXTENSIONS.includes(extension)) {
+        showToast("Unsupported file format! Supported: " + ALLOWED_EXTENSIONS.join(', '), "error");
         return;
     }
 
