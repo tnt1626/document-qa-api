@@ -13,8 +13,20 @@ This repository is that librarian: a lightweight FastAPI service powered by a re
 
 * **Document Management:** Standard REST APIs (`POST /documents/`, `GET /documents/`, `DELETE /documents/`) to upload and index files.
 * **Conversational Agent (`POST /agent/query`):** A unified chat endpoint driven by the Agent's reasoning loop.
+  * **Real-time SSE Streaming:** Returns a `text/event-stream` using Server-Sent Events (SSE), allowing the client to consume token chunks and reasoning logs in real-time.
   * **Short-Term Memory:** Accepts `chat_history` to maintain context across follow-up questions.
   * **Scope Selection:** Pass `document_id` to focus the search on a specific file, or omit it for a global cross-document search.
+  * **Dynamic UI Progress Checklist:** A Devin-style dynamic checklist showing exactly what files are being scanned or read, powered by a pure CSS spinner.
+  * **Interactive Thought Logs:** A collapsible reasoning accordion that opens while the Agent is thinking and automatically collapses when the final answer starts typing out.
+
+---
+
+## Stream Event Schema
+
+The stream emits standard SSE events in the following formats:
+- **`event: thought`**: Emitted at the end of each reasoning loop. The `data` payload is a JSON representation of `ThoughtStep` containing loop index, token usage, tool metadata, and arguments.
+- **`event: answer`**: Emitted chunk-by-chunk when generating the final text response. The `data` is a JSON object `{"text": "chunk"}`.
+- **`event: done`**: Emitted once execution is complete, providing a final status.
 
 ---
 
@@ -30,6 +42,7 @@ docker compose up -d db
 Create a `.env` file in the root directory:
 ```env
 DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/docqa
+OLLAMA_BASE_URL=http://localhost:11434
 GROQ_API_KEY=your_groq_api_key_here
 ```
 
