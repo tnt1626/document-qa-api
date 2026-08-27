@@ -714,3 +714,28 @@ select:hover {
 .toast.success { border-color: var(--accent-emerald); color: var(--accent-emerald); }
 .toast.error { border-color: var(--accent-rose); color: var(--accent-rose); }
 .toast.info { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+
+/* Agent real-time status loading styles */
+.agent-status-indicator {
+    font-size: 0.9rem;
+    color: var(--accent-cyan);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-style: italic;
+    padding: 0.2rem 0;
+    margin-bottom: 0.5rem;
+    animation: pulse-glow 1.5s infinite alternate;
+}
+
+.animate-spin {
+    animation: spin 1s linear infinite;
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}

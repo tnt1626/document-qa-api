@@ -344,7 +344,7 @@ async function submitQuestion() {
     }
 }
 
-// Create an empty assistant message bubble to stream text/thought into
+// Create an empty assistant message bubble with a dynamic status indicator
 function appendEmptyAssistantBubble() {
     const id = `msg-${Math.random().toString(36).substr(2, 9)}`;
     const messageContainer = document.createElement('div');
@@ -355,19 +355,27 @@ function appendEmptyAssistantBubble() {
 
     messageContainer.innerHTML = `
         <div class="message-bubble markdown-body" id="${id}-bubble">
-            <span class="streaming-cursor">█</span>
+            <div class="agent-status-indicator" id="${id}-status">
+                <i data-lucide="loader-2" class="animate-spin"></i>
+                <span>Agent is starting reasoning...</span>
+            </div>
         </div>
         <div class="message-meta">Agent • ${timestamp}</div>
     `;
     chatBox.appendChild(messageContainer);
     chatBox.scrollTop = chatBox.scrollHeight;
+    initIcons();
     return id;
 }
 
-// Update the assistant text bubble with markdown content as it streams
+// Update the assistant text bubble with markdown content, removing the status loader
 function updateAssistantTextContent(id, text) {
     const bubble = document.getElementById(`${id}-bubble`);
     if (!bubble) return;
+
+    // Remove the status loading indicator once the final answer begins
+    const statusIndicator = bubble.querySelector('.agent-status-indicator');
+    if (statusIndicator) statusIndicator.remove();
 
     const parsedText = window.marked ? window.marked.parse(text) : escapeHtml(text);
     
@@ -381,10 +389,32 @@ function updateAssistantTextContent(id, text) {
     chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-// Update the assistant thought trace accordion inside the active message bubble
+// Update the thought trace accordion and change the status text dynamically based on the active tool
 function updateAssistantThoughtTrace(id, steps, forceOpen = false) {
     const bubble = document.getElementById(`${id}-bubble`);
     if (!bubble) return;
+
+    // Update status text indicator based on the latest step's tool call
+    const latestStep = steps[steps.length - 1];
+    let statusText = "Agent is thinking...";
+    
+    if (latestStep.tool_calls && latestStep.tool_calls.length > 0) {
+        const toolName = latestStep.tool_calls[0].name;
+        if (toolName === "search_document") {
+            statusText = "Searching database for relevant document chunks...";
+        } else if (toolName === "list_documents") {
+            statusText = "Scanning knowledge base document list...";
+        } else if (toolName === "get_full_document") {
+            statusText = "Reading the full content of the document...";
+        }
+    } else if (latestStep.thought) {
+        statusText = "Thinking: " + latestStep.thought.substring(0, 50) + "...";
+    }
+
+    const statusEl = document.querySelector(`#${id}-status span`);
+    if (statusEl) {
+        statusEl.textContent = statusText;
+    }
 
     // Remove existing accordion if any
     const oldAccordion = bubble.querySelector('.thought-accordion');
