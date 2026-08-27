@@ -285,6 +285,7 @@ async def run_agent(
 
         thought_steps.append(ThoughtStep(
             loop_index=loops,
+            token=response.usage.total_tokens,
             thought=response.choices[0].message.content,
             tool_calls=tool_calls
         ))
