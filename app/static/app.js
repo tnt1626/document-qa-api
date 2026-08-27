@@ -240,7 +240,7 @@ async function submitQuestion() {
         // Prepare request body
         const requestBody = {
             question: questionText,
-            chat_history: chatHistory
+            chat_history: chatHistory.map(h => ({ role: h.role, content: h.content }))
         };
         if (selectedDocumentId) {
             requestBody.document_id = selectedDocumentId;
@@ -262,14 +262,72 @@ async function submitQuestion() {
             throw new Error(errBody.detail || "Server error");
         }
 
-        const data = await response.json();
-        
-        // 3. Render Assistant Response
-        appendMessage(data.answer, 'assistant', data.thought_steps);
+        // 3. Setup stream readers
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
+
+        // Create empty assistant bubble that we will populate dynamically
+        const assistantMessageId = appendEmptyAssistantBubble();
+        let accumulatedAnswer = "";
+        let steps = [];
+
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+
+            // Split buffer by double newline to separate SSE event packets
+            const parts = buffer.split("\n\n");
+            // Keep the last partial packet in the buffer
+            buffer = parts.pop();
+
+            for (const part of parts) {
+                if (!part.trim()) continue;
+
+                // Parse SSE format: event: ... \n data: ...
+                const lines = part.split("\n");
+                let eventType = "";
+                let dataString = "";
+
+                for (const line of lines) {
+                    if (line.startsWith("event:")) {
+                        eventType = line.replace("event:", "").trim();
+                    } else if (line.startsWith("data:")) {
+                        dataString = line.replace("data:", "").trim();
+                    }
+                }
+
+                // Process events
+                if (eventType === "thought" && dataString) {
+                    try {
+                        const step = JSON.parse(dataString);
+                        steps.push(step);
+                        updateAssistantThoughtTrace(assistantMessageId, steps);
+                    } catch (e) {
+                        console.error("Failed to parse thought step JSON:", e);
+                    }
+                } else if (eventType === "answer" && dataString) {
+                    try {
+                        const payload = JSON.parse(dataString);
+                        accumulatedAnswer += payload.text;
+                        updateAssistantTextContent(assistantMessageId, accumulatedAnswer);
+                    } catch (e) {
+                        console.error("Failed to parse answer chunk JSON:", e);
+                    }
+                } else if (eventType === "done") {
+                    console.log("Streaming completed");
+                }
+            }
+        }
+
+        // Remove cursor indicator
+        removeStreamingCursor(assistantMessageId);
 
         // 4. Update memory (Save user & assistant history)
         chatHistory.push({ role: 'user', content: questionText });
-        chatHistory.push({ role: 'assistant', content: data.answer });
+        chatHistory.push({ role: 'assistant', content: accumulatedAnswer });
 
     } catch (error) {
         removeLoadingIndicator(loadingMessageId);
@@ -281,6 +339,74 @@ async function submitQuestion() {
         userInput.disabled = false;
         userInput.focus();
     }
+}
+
+// Create an empty assistant message bubble to stream text/thought into
+function appendEmptyAssistantBubble() {
+    const id = `msg-${Math.random().toString(36).substr(2, 9)}`;
+    const messageContainer = document.createElement('div');
+    messageContainer.className = 'message assistant';
+    messageContainer.id = id;
+
+    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    messageContainer.innerHTML = `
+        <div class="message-bubble markdown-body" id="${id}-bubble">
+            <span class="streaming-cursor">█</span>
+        </div>
+        <div class="message-meta">Agent • ${timestamp}</div>
+    `;
+    chatBox.appendChild(messageContainer);
+    chatBox.scrollTop = chatBox.scrollHeight;
+    return id;
+}
+
+// Update the assistant text bubble with markdown content as it streams
+function updateAssistantTextContent(id, text) {
+    const bubble = document.getElementById(`${id}-bubble`);
+    if (!bubble) return;
+
+    const parsedText = window.marked ? window.marked.parse(text) : escapeHtml(text);
+    
+    // Preserve existing thought accordions
+    const existingAccordion = bubble.querySelector('.thought-accordion');
+    
+    bubble.innerHTML = parsedText + '<span class="streaming-cursor">█</span>';
+    if (existingAccordion) {
+        bubble.appendChild(existingAccordion);
+    }
+    chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+// Update the assistant thought trace accordion inside the active message bubble
+function updateAssistantThoughtTrace(id, steps) {
+    const bubble = document.getElementById(`${id}-bubble`);
+    if (!bubble) return;
+
+    // Remove existing accordion if any
+    const oldAccordion = bubble.querySelector('.thought-accordion');
+    if (oldAccordion) oldAccordion.remove();
+
+    // Create new accordion node
+    const accordionHtml = renderThoughtSteps(steps);
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = accordionHtml.trim();
+    const newAccordion = tempDiv.firstChild;
+
+    // Prepend or append accordion inside the bubble
+    // We want the thought accordion to sit before the text answers if possible, or inside the bubble
+    bubble.appendChild(newAccordion);
+    
+    initIcons();
+    chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+// Remove streaming cursor at the end
+function removeStreamingCursor(id) {
+    const bubble = document.getElementById(`${id}-bubble`);
+    if (!bubble) return;
+    const cursor = bubble.querySelector('.streaming-cursor');
+    if (cursor) cursor.remove();
 }
 
 // Append bubble to chat console
