@@ -10,6 +10,16 @@ from app.services.rag.embedder import embed_text
 from app.services.rag.generator import generate, OllamaConnectionError, OllamaModelNotFound
 from app.schemas import DocumentUploadResponse, DocumentListItem, QueryRequest, QueryResponse
 
+CONTENT_TYPES = [
+    "text/html",
+    "text/css",
+    "text/csv",
+    "text/xml",
+    "text/plain",
+    "text/markdown",
+    "application/json"
+]
+
 logger = logging.getLogger(__name__)
 
 doc_router = APIRouter(prefix="/documents")
@@ -46,10 +56,10 @@ async def upload_document(
     db: AsyncSession = Depends(get_db),
 ):
     """Upload a text document and process it for Q&A."""
-    if file.content_type != "text/plain":
+    if file.content_type not in CONTENT_TYPES:
         raise HTTPException(
             status_code=400,
-            detail="Only text is supported"
+            detail=f"Format as {file.content_type} is not supported"
         )
     
     try:

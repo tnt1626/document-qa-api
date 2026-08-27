@@ -181,8 +181,12 @@ uploadDropzone.ondrop = (e) => {
 
 async function handleFileUpload(file) {
     if (!file) return;
-    if (!file.name.endsWith('.txt')) {
-        showToast("Only plain text (.txt) files are supported!", "error");
+    
+    const ALLOWED_EXTENSIONS = ['.txt', '.md', '.html', '.css', '.csv', '.xml', '.json'];
+    const extension = '.' + file.name.split('.').pop().toLowerCase();
+    
+    if (!ALLOWED_EXTENSIONS.includes(extension)) {
+        showToast("Unsupported file format! Supported: " + ALLOWED_EXTENSIONS.join(', '), "error");
         return;
     }
 
@@ -236,7 +240,7 @@ async function submitQuestion() {
         // Prepare request body
         const requestBody = {
             question: questionText,
-            chat_history: chatHistory
+            chat_history: chatHistory.map(h => ({ role: h.role, content: h.content }))
         };
         if (selectedDocumentId) {
             requestBody.document_id = selectedDocumentId;
@@ -258,14 +262,75 @@ async function submitQuestion() {
             throw new Error(errBody.detail || "Server error");
         }
 
-        const data = await response.json();
-        
-        // 3. Render Assistant Response
-        appendMessage(data.answer, 'assistant', data.thought_steps);
+        // 3. Setup stream readers
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
+
+        // Create empty assistant bubble that we will populate dynamically
+        const assistantMessageId = appendEmptyAssistantBubble();
+        let accumulatedAnswer = "";
+        let steps = [];
+
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+
+            // Split buffer by double newline to separate SSE event packets
+            const parts = buffer.split("\n\n");
+            // Keep the last partial packet in the buffer
+            buffer = parts.pop();
+
+            for (const part of parts) {
+                if (!part.trim()) continue;
+
+                // Parse SSE format: event: ... \n data: ...
+                const lines = part.split("\n");
+                let eventType = "";
+                let dataString = "";
+
+                for (const line of lines) {
+                    if (line.startsWith("event:")) {
+                        eventType = line.replace("event:", "").trim();
+                    } else if (line.startsWith("data:")) {
+                        dataString = line.replace("data:", "").trim();
+                    }
+                }
+
+                // Process events
+                if (eventType === "thought" && dataString) {
+                    try {
+                        const step = JSON.parse(dataString);
+                        steps.push(step);
+                        // Force accordion to open while agent is actively thinking
+                        updateAssistantThoughtTrace(assistantMessageId, steps, true);
+                    } catch (e) {
+                        console.error("Failed to parse thought step JSON:", e);
+                    }
+                } else if (eventType === "answer" && dataString) {
+                    try {
+                        const payload = JSON.parse(dataString);
+                        // Collapse the thoughts trace when the final answer starts streaming
+                        collapseAssistantThoughtTrace(assistantMessageId);
+                        accumulatedAnswer += payload.text;
+                        updateAssistantTextContent(assistantMessageId, accumulatedAnswer);
+                    } catch (e) {
+                        console.error("Failed to parse answer chunk JSON:", e);
+                    }
+                } else if (eventType === "done") {
+                    console.log("Streaming completed");
+                }
+            }
+        }
+
+        // Remove cursor indicator
+        removeStreamingCursor(assistantMessageId);
 
         // 4. Update memory (Save user & assistant history)
         chatHistory.push({ role: 'user', content: questionText });
-        chatHistory.push({ role: 'assistant', content: data.answer });
+        chatHistory.push({ role: 'assistant', content: accumulatedAnswer });
 
     } catch (error) {
         removeLoadingIndicator(loadingMessageId);
@@ -277,6 +342,160 @@ async function submitQuestion() {
         userInput.disabled = false;
         userInput.focus();
     }
+}
+
+// Create an empty assistant message bubble with a dynamic progress checklist
+function appendEmptyAssistantBubble() {
+    const id = `msg-${Math.random().toString(36).substr(2, 9)}`;
+    const messageContainer = document.createElement('div');
+    messageContainer.className = 'message assistant';
+    messageContainer.id = id;
+
+    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    messageContainer.innerHTML = `
+        <div class="message-bubble markdown-body" id="${id}-bubble">
+            <div class="agent-activity-checklist" id="${id}-checklist">
+                <div class="agent-activity-item active" id="${id}-active-item">
+                    <span class="agent-activity-icon"><div class="agent-spinner"></div></span>
+                    <span class="agent-activity-text">Agent is starting reasoning...</span>
+                </div>
+            </div>
+            <!-- Container for streaming final answer -->
+            <div class="agent-text-answer" id="${id}-answer"></div>
+        </div>
+        <div class="message-meta">Agent • ${timestamp}</div>
+    `;
+    chatBox.appendChild(messageContainer);
+    chatBox.scrollTop = chatBox.scrollHeight;
+    return id;
+}
+
+// Update the assistant text bubble with markdown content, removing the active checklist loader
+function updateAssistantTextContent(id, text) {
+    const bubble = document.getElementById(`${id}-bubble`);
+    if (!bubble) return;
+
+    // Remove the active loading item from the checklist
+    const activeItem = document.getElementById(`${id}-active-item`);
+    if (activeItem) activeItem.remove();
+
+    const parsedText = window.marked ? window.marked.parse(text) : escapeHtml(text);
+    
+    // Find or create the text answer container
+    let textContainer = document.getElementById(`${id}-answer`);
+    if (!textContainer) {
+        textContainer = document.createElement('div');
+        textContainer.className = 'agent-text-answer';
+        textContainer.id = `${id}-answer`;
+        
+        // Insert it after checklist but before accordion
+        const checklist = document.getElementById(`${id}-checklist`);
+        const accordion = bubble.querySelector('.thought-accordion');
+        if (accordion) {
+            bubble.insertBefore(textContainer, accordion);
+        } else {
+            bubble.appendChild(textContainer);
+        }
+    }
+
+    textContainer.innerHTML = parsedText + '<span class="streaming-cursor">█</span>';
+    chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+// Update the thought trace accordion and build the dynamic activity checklist
+function updateAssistantThoughtTrace(id, steps, forceOpen = false) {
+    const bubble = document.getElementById(`${id}-bubble`);
+    if (!bubble) return;
+
+    // 1. Re-render the activity checklist!
+    const checklistEl = document.getElementById(`${id}-checklist`);
+    if (checklistEl) {
+        let checklistHtml = "";
+        
+        steps.forEach((step) => {
+            let taskDescription = `Step ${step.loop_index + 1}: Thought process completed`;
+            if (step.tool_calls && step.tool_calls.length > 0) {
+                const toolName = step.tool_calls[0].name;
+                if (toolName === "search_document") {
+                    taskDescription = `Step ${step.loop_index + 1}: Searched database for relevant chunks`;
+                } else if (toolName === "list_documents") {
+                    taskDescription = `Step ${step.loop_index + 1}: Scanned knowledge base document list`;
+                } else if (toolName === "get_full_document") {
+                    taskDescription = `Step ${step.loop_index + 1}: Read full content of the document`;
+                }
+            }
+            
+            checklistHtml += `
+                <div class="agent-activity-item completed">
+                    <span class="agent-activity-icon check">✓</span>
+                    <span class="agent-activity-text">${taskDescription}</span>
+                </div>
+            `;
+        });
+
+        // Append the next active step prediction
+        const nextStepNum = steps.length + 1;
+        checklistHtml += `
+            <div class="agent-activity-item active" id="${id}-active-item">
+                <span class="agent-activity-icon"><div class="agent-spinner"></div></span>
+                <span class="agent-activity-text">Step ${nextStepNum}: Processing next loop step...</span>
+            </div>
+        `;
+        
+        checklistEl.innerHTML = checklistHtml;
+    }
+
+    // Remove existing accordion if any
+    const oldAccordion = bubble.querySelector('.thought-accordion');
+    let wasOpen = forceOpen;
+    if (oldAccordion) {
+        // If not forced, retain the user's manual toggle state
+        if (!forceOpen) {
+            wasOpen = oldAccordion.classList.contains('open');
+        }
+        oldAccordion.remove();
+    }
+
+    // Create new accordion node
+    const accordionHtml = renderThoughtSteps(steps);
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = accordionHtml.trim();
+    const newAccordion = tempDiv.firstChild;
+
+    // Apply the open class if needed
+    if (wasOpen) {
+        newAccordion.classList.add('open');
+    }
+
+    // Append accordion inside the bubble
+    bubble.appendChild(newAccordion);
+    
+    initIcons();
+    chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+// Automatically collapse the thought accordion
+function collapseAssistantThoughtTrace(id) {
+    const bubble = document.getElementById(`${id}-bubble`);
+    if (!bubble) return;
+    const accordion = bubble.querySelector('.thought-accordion');
+    if (accordion && accordion.classList.contains('open')) {
+        accordion.classList.remove('open');
+        initIcons();
+    }
+}
+
+// Remove streaming cursor and active progress item at the end of stream
+function removeStreamingCursor(id) {
+    const bubble = document.getElementById(`${id}-bubble`);
+    if (!bubble) return;
+    
+    const cursor = bubble.querySelector('.streaming-cursor');
+    if (cursor) cursor.remove();
+
+    const activeItem = document.getElementById(`${id}-active-item`);
+    if (activeItem) activeItem.remove();
 }
 
 // Append bubble to chat console
@@ -318,6 +537,7 @@ function appendMessage(text, role, thoughtSteps = []) {
 // Render Collapsible Accordion for Thought Traces
 function renderThoughtSteps(steps) {
     const accordionId = `accordion-${Math.random().toString(36).substr(2, 9)}`;
+    const totalTokens = steps.reduce((sum, step) => sum + (step.token || 0), 0);
     let stepsHtml = '';
 
     steps.forEach(step => {
@@ -337,7 +557,7 @@ function renderThoughtSteps(steps) {
 
         stepsHtml += `
             <div class="thought-step">
-                <div class="step-label">▶ Loop Step ${step.loop_index + 1}</div>
+                <div class="step-label">▶ Loop Step ${step.loop_index + 1} (${step.token || 0} tokens)</div>
                 ${step.thought ? `<div class="step-thought">${escapeHtml(step.thought)}</div>` : ''}
                 ${toolCallsHtml}
             </div>
@@ -347,7 +567,7 @@ function renderThoughtSteps(steps) {
     return `
         <div class="thought-accordion" id="${accordionId}">
             <div class="thought-header" onclick="toggleAccordion('${accordionId}')">
-                <span><i data-lucide="eye" style="width: 14px; height: 14px; display: inline; vertical-align: middle; margin-right: 4px;"></i> View Agent Reasoning (${steps.length} steps)</span>
+                <span><i data-lucide="eye" style="width: 14px; height: 14px; display: inline; vertical-align: middle; margin-right: 4px;"></i> View Agent Reasoning (${steps.length} steps | ${totalTokens} tokens)</span>
                 <i data-lucide="chevron-down" class="thought-header-icon" style="width: 14px; height: 14px;"></i>
             </div>
             <div class="thought-content">

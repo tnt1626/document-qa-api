@@ -18,6 +18,7 @@ class QueryRequest(BaseModel):
 
 class QueryResponse(BaseModel):
     answer: str
+    token: int
     sources: list[str]
 
 class ToolCallDetail(BaseModel):
@@ -28,6 +29,7 @@ class ToolCallDetail(BaseModel):
 
 class ThoughtStep(BaseModel):
     loop_index: int
+    token: int
     thought: str | None = None
     tool_calls: list[ToolCallDetail] = []
 
