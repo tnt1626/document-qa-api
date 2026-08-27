@@ -304,13 +304,16 @@ async function submitQuestion() {
                     try {
                         const step = JSON.parse(dataString);
                         steps.push(step);
-                        updateAssistantThoughtTrace(assistantMessageId, steps);
+                        // Force accordion to open while agent is actively thinking
+                        updateAssistantThoughtTrace(assistantMessageId, steps, true);
                     } catch (e) {
                         console.error("Failed to parse thought step JSON:", e);
                     }
                 } else if (eventType === "answer" && dataString) {
                     try {
                         const payload = JSON.parse(dataString);
+                        // Collapse the thoughts trace when the final answer starts streaming
+                        collapseAssistantThoughtTrace(assistantMessageId);
                         accumulatedAnswer += payload.text;
                         updateAssistantTextContent(assistantMessageId, accumulatedAnswer);
                     } catch (e) {
@@ -379,13 +382,20 @@ function updateAssistantTextContent(id, text) {
 }
 
 // Update the assistant thought trace accordion inside the active message bubble
-function updateAssistantThoughtTrace(id, steps) {
+function updateAssistantThoughtTrace(id, steps, forceOpen = false) {
     const bubble = document.getElementById(`${id}-bubble`);
     if (!bubble) return;
 
     // Remove existing accordion if any
     const oldAccordion = bubble.querySelector('.thought-accordion');
-    if (oldAccordion) oldAccordion.remove();
+    let wasOpen = forceOpen;
+    if (oldAccordion) {
+        // If not forced, retain the user's manual toggle state
+        if (!forceOpen) {
+            wasOpen = oldAccordion.classList.contains('open');
+        }
+        oldAccordion.remove();
+    }
 
     // Create new accordion node
     const accordionHtml = renderThoughtSteps(steps);
@@ -393,12 +403,27 @@ function updateAssistantThoughtTrace(id, steps) {
     tempDiv.innerHTML = accordionHtml.trim();
     const newAccordion = tempDiv.firstChild;
 
-    // Prepend or append accordion inside the bubble
-    // We want the thought accordion to sit before the text answers if possible, or inside the bubble
+    // Apply the open class if needed
+    if (wasOpen) {
+        newAccordion.classList.add('open');
+    }
+
+    // Append accordion inside the bubble
     bubble.appendChild(newAccordion);
     
     initIcons();
     chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+// Automatically collapse the thought accordion
+function collapseAssistantThoughtTrace(id) {
+    const bubble = document.getElementById(`${id}-bubble`);
+    if (!bubble) return;
+    const accordion = bubble.querySelector('.thought-accordion');
+    if (accordion && accordion.classList.contains('open')) {
+        accordion.classList.remove('open');
+        initIcons();
+    }
 }
 
 // Remove streaming cursor at the end
