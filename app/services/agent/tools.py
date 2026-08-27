@@ -389,7 +389,7 @@ async def run_agent_stream(
                     if tc.function.arguments:
                         accumulated_tool_calls[index]["arguments"] += tc.function.arguments
 
-        if not calling_tools:
+        if not calling_tools:   
             messages.append({
                 "role": role,
                 "content": accumulated_content

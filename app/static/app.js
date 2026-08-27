@@ -344,7 +344,7 @@ async function submitQuestion() {
     }
 }
 
-// Create an empty assistant message bubble with a dynamic status indicator
+// Create an empty assistant message bubble with a dynamic progress checklist
 function appendEmptyAssistantBubble() {
     const id = `msg-${Math.random().toString(36).substr(2, 9)}`;
     const messageContainer = document.createElement('div');
@@ -355,65 +355,95 @@ function appendEmptyAssistantBubble() {
 
     messageContainer.innerHTML = `
         <div class="message-bubble markdown-body" id="${id}-bubble">
-            <div class="agent-status-indicator" id="${id}-status">
-                <i data-lucide="loader-2" class="animate-spin"></i>
-                <span>Agent is starting reasoning...</span>
+            <div class="agent-activity-checklist" id="${id}-checklist">
+                <div class="agent-activity-item active" id="${id}-active-item">
+                    <span class="agent-activity-icon"><div class="agent-spinner"></div></span>
+                    <span class="agent-activity-text">Agent is starting reasoning...</span>
+                </div>
             </div>
+            <!-- Container for streaming final answer -->
+            <div class="agent-text-answer" id="${id}-answer"></div>
         </div>
         <div class="message-meta">Agent • ${timestamp}</div>
     `;
     chatBox.appendChild(messageContainer);
     chatBox.scrollTop = chatBox.scrollHeight;
-    initIcons();
     return id;
 }
 
-// Update the assistant text bubble with markdown content, removing the status loader
+// Update the assistant text bubble with markdown content, removing the active checklist loader
 function updateAssistantTextContent(id, text) {
     const bubble = document.getElementById(`${id}-bubble`);
     if (!bubble) return;
 
-    // Remove the status loading indicator once the final answer begins
-    const statusIndicator = bubble.querySelector('.agent-status-indicator');
-    if (statusIndicator) statusIndicator.remove();
+    // Remove the active loading item from the checklist
+    const activeItem = document.getElementById(`${id}-active-item`);
+    if (activeItem) activeItem.remove();
 
     const parsedText = window.marked ? window.marked.parse(text) : escapeHtml(text);
     
-    // Preserve existing thought accordions
-    const existingAccordion = bubble.querySelector('.thought-accordion');
-    
-    bubble.innerHTML = parsedText + '<span class="streaming-cursor">█</span>';
-    if (existingAccordion) {
-        bubble.appendChild(existingAccordion);
+    // Find or create the text answer container
+    let textContainer = document.getElementById(`${id}-answer`);
+    if (!textContainer) {
+        textContainer = document.createElement('div');
+        textContainer.className = 'agent-text-answer';
+        textContainer.id = `${id}-answer`;
+        
+        // Insert it after checklist but before accordion
+        const checklist = document.getElementById(`${id}-checklist`);
+        const accordion = bubble.querySelector('.thought-accordion');
+        if (accordion) {
+            bubble.insertBefore(textContainer, accordion);
+        } else {
+            bubble.appendChild(textContainer);
+        }
     }
+
+    textContainer.innerHTML = parsedText + '<span class="streaming-cursor">█</span>';
     chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-// Update the thought trace accordion and change the status text dynamically based on the active tool
+// Update the thought trace accordion and build the dynamic activity checklist
 function updateAssistantThoughtTrace(id, steps, forceOpen = false) {
     const bubble = document.getElementById(`${id}-bubble`);
     if (!bubble) return;
 
-    // Update status text indicator based on the latest step's tool call
-    const latestStep = steps[steps.length - 1];
-    let statusText = "Agent is thinking...";
-    
-    if (latestStep.tool_calls && latestStep.tool_calls.length > 0) {
-        const toolName = latestStep.tool_calls[0].name;
-        if (toolName === "search_document") {
-            statusText = "Searching database for relevant document chunks...";
-        } else if (toolName === "list_documents") {
-            statusText = "Scanning knowledge base document list...";
-        } else if (toolName === "get_full_document") {
-            statusText = "Reading the full content of the document...";
-        }
-    } else if (latestStep.thought) {
-        statusText = "Thinking: " + latestStep.thought.substring(0, 50) + "...";
-    }
+    // 1. Re-render the activity checklist!
+    const checklistEl = document.getElementById(`${id}-checklist`);
+    if (checklistEl) {
+        let checklistHtml = "";
+        
+        steps.forEach((step) => {
+            let taskDescription = `Step ${step.loop_index + 1}: Thought process completed`;
+            if (step.tool_calls && step.tool_calls.length > 0) {
+                const toolName = step.tool_calls[0].name;
+                if (toolName === "search_document") {
+                    taskDescription = `Step ${step.loop_index + 1}: Searched database for relevant chunks`;
+                } else if (toolName === "list_documents") {
+                    taskDescription = `Step ${step.loop_index + 1}: Scanned knowledge base document list`;
+                } else if (toolName === "get_full_document") {
+                    taskDescription = `Step ${step.loop_index + 1}: Read full content of the document`;
+                }
+            }
+            
+            checklistHtml += `
+                <div class="agent-activity-item completed">
+                    <span class="agent-activity-icon check">✓</span>
+                    <span class="agent-activity-text">${taskDescription}</span>
+                </div>
+            `;
+        });
 
-    const statusEl = document.querySelector(`#${id}-status span`);
-    if (statusEl) {
-        statusEl.textContent = statusText;
+        // Append the next active step prediction
+        const nextStepNum = steps.length + 1;
+        checklistHtml += `
+            <div class="agent-activity-item active" id="${id}-active-item">
+                <span class="agent-activity-icon"><div class="agent-spinner"></div></span>
+                <span class="agent-activity-text">Step ${nextStepNum}: Processing next loop step...</span>
+            </div>
+        `;
+        
+        checklistEl.innerHTML = checklistHtml;
     }
 
     // Remove existing accordion if any
@@ -456,12 +486,16 @@ function collapseAssistantThoughtTrace(id) {
     }
 }
 
-// Remove streaming cursor at the end
+// Remove streaming cursor and active progress item at the end of stream
 function removeStreamingCursor(id) {
     const bubble = document.getElementById(`${id}-bubble`);
     if (!bubble) return;
+    
     const cursor = bubble.querySelector('.streaming-cursor');
     if (cursor) cursor.remove();
+
+    const activeItem = document.getElementById(`${id}-active-item`);
+    if (activeItem) activeItem.remove();
 }
 
 // Append bubble to chat console
