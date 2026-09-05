@@ -39,17 +39,35 @@ function showToast(message, type = 'info') {
     }, 4000);
 }
 
+let pollInterval = null;
+
 // Fetch Document List from API
-async function fetchDocuments() {
+async function fetchDocuments(showError = true) {
     try {
         const response = await fetch('/documents/?limit=50');
         if (!response.ok) throw new Error("Failed to fetch documents");
         documentList = await response.json();
         renderDocuments();
         updateDocumentDropdown();
+        checkAndStartPolling();
     } catch (error) {
         console.error(error);
-        showToast("Error loading document list", "error");
+        if (showError) showToast("Error loading document list", "error");
+    }
+}
+
+// Auto-poll document list when any document is processing or pending
+function checkAndStartPolling() {
+    const hasUnfinished = documentList.some(doc => doc.status === 'processing' || doc.status === 'pending');
+    if (hasUnfinished) {
+        if (!pollInterval) {
+            pollInterval = setInterval(() => fetchDocuments(false), 3000);
+        }
+    } else {
+        if (pollInterval) {
+            clearInterval(pollInterval);
+            pollInterval = null;
+        }
     }
 }
 
@@ -75,10 +93,30 @@ function renderDocuments() {
 
         const dateStr = new Date(doc.created_at).toLocaleString();
 
+        const statusClass = doc.status || 'completed';
+        let statusLabel = statusClass;
+        let statusIcon = '';
+        if (statusClass === 'completed') {
+            statusLabel = 'Ready';
+            statusIcon = '<span style="width: 6px; height: 6px; border-radius: 50%; background-color: var(--accent-emerald);"></span>';
+        } else if (statusClass === 'processing') {
+            statusLabel = 'Processing';
+            statusIcon = '<div class="agent-spinner" style="width: 8px; height: 8px; border-width: 1px;"></div>';
+        } else if (statusClass === 'pending') {
+            statusLabel = 'Pending';
+            statusIcon = '<span style="width: 6px; height: 6px; border-radius: 50%; background-color: var(--accent-amber);"></span>';
+        } else if (statusClass === 'failed') {
+            statusLabel = 'Failed';
+            statusIcon = '<span style="color: var(--accent-rose); font-weight: bold;">✕</span>';
+        }
+
         item.innerHTML = `
             <div class="doc-header">
                 <span class="doc-name" title="${doc.filename}">${doc.filename}</span>
                 <div class="doc-actions">
+                    <span class="status-badge-pill ${statusClass}">
+                        ${statusIcon} ${statusLabel}
+                    </span>
                     <button class="doc-btn delete-btn" title="Delete Document" onclick="event.stopPropagation(); deleteDoc('${doc.id}')">
                         <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
                     </button>
@@ -101,6 +139,12 @@ function renderDocuments() {
 
 // Select a document from sidebar
 function selectDocument(docId) {
+    const doc = documentList.find(d => d.id === docId);
+    if (doc && doc.status && doc.status !== 'completed') {
+        showToast(`Document status is '${doc.status}'. Only completed documents can be queried.`, "error");
+        return;
+    }
+
     if (selectedDocumentId === docId) {
         selectedDocumentId = ""; // Toggle off
     } else {
@@ -113,12 +157,15 @@ function selectDocument(docId) {
 
 // Update the Document Selection Dropdown
 function updateDocumentDropdown() {
-    // Keep the default option
     docSelect.innerHTML = '<option value="">🔍 Search All Documents</option>';
     documentList.forEach(doc => {
         const option = document.createElement('option');
         option.value = doc.id;
-        option.textContent = `📄 ${doc.filename}`;
+        const statusText = doc.status && doc.status !== 'completed' ? ` [${doc.status.toUpperCase()}]` : '';
+        option.textContent = `📄 ${doc.filename}${statusText}`;
+        if (doc.status && doc.status !== 'completed') {
+            option.disabled = true;
+        }
         docSelect.appendChild(option);
     });
     docSelect.value = selectedDocumentId;
@@ -126,6 +173,12 @@ function updateDocumentDropdown() {
 
 // Dropdown Change Handler
 docSelect.onchange = (e) => {
+    const doc = documentList.find(d => d.id === e.target.value);
+    if (doc && doc.status && doc.status !== 'completed') {
+        showToast(`Document status is '${doc.status}'. Only completed documents can be queried.`, "error");
+        docSelect.value = selectedDocumentId;
+        return;
+    }
     selectedDocumentId = e.target.value;
     renderDocuments();
 };
