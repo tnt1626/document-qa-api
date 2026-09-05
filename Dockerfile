@@ -10,7 +10,7 @@ RUN uv sync --no-dev
 
 COPY . .
 
-ENV PATH="/app/.venv/bin:$PATH"
+ENV PATH="/src/.venv/bin:$PATH"
 
 EXPOSE 8000
 

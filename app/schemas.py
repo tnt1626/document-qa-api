@@ -2,12 +2,15 @@ import uuid
 from typing import Literal
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict
+from app.models import FileStatus
 
 class DocumentListItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    status: FileStatus
     filename: str
+    updated_at: datetime
     created_at: datetime
 
 class DocumentUploadResponse(DocumentListItem):

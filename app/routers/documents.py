@@ -3,10 +3,10 @@ import logging
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import APIRouter, File, UploadFile, Depends, HTTPException, BackgroundTasks
-from app.models import Document, Chunk
-from app.database import get_db, SessionLocal
 from app.services.rag.chunker import chunk_text
 from app.services.rag.embedder import embed_text
+from app.models import Document, Chunk, FileStatus
+from app.database import get_db, SessionLocal, update_doc_status
 from app.services.rag.generator import generate, OllamaConnectionError, OllamaModelNotFound
 from app.schemas import DocumentUploadResponse, DocumentListItem, QueryRequest, QueryResponse
 
@@ -25,12 +25,13 @@ logger = logging.getLogger(__name__)
 doc_router = APIRouter(prefix="/documents")
 
 async def upload(doc_id: uuid.UUID, content: str, chunk_size: int, overlap: int):
+    await update_doc_status(doc_id, FileStatus.PROCESSING)
     try:
         chunks = chunk_text(content, chunk_size, overlap)
     except Exception as e:
+        await update_doc_status(doc_id, FileStatus.FAILED)
         logger.error(f"Failed to chunk document {doc_id}: {e}")
         return
-
     async with SessionLocal() as session:
         try:
             for idx, chunk in enumerate(chunks):
@@ -42,8 +43,10 @@ async def upload(doc_id: uuid.UUID, content: str, chunk_size: int, overlap: int)
                     chunk_index=idx
                 ))
             await session.commit()
+            await update_doc_status(doc_id, FileStatus.COMPLETED)
         except Exception as e:
             await session.rollback()
+            await update_doc_status(doc_id, FileStatus.FAILED)
             logger.error(f"Failed to save chunks for document {doc_id}: {e}")
 
 
@@ -84,13 +87,9 @@ async def upload_document(
         doc_id=doc.id,
         content=text,
         chunk_size=chunk_size,
-        overlap=overlap
+        overlap=overlap,
     )
-    return DocumentUploadResponse(
-        id=doc.id,
-        filename=doc.filename,
-        created_at=doc.created_at,
-    )
+    return DocumentUploadResponse.model_validate(doc)
 
 
 @doc_router.post("/{document_id}/query", response_model=QueryResponse)
@@ -107,6 +106,11 @@ async def query_document(
         raise HTTPException(
             status_code=404,
             detail="Document not found"
+        )
+    if doc.status != FileStatus.COMPLETED:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Document is not ready for querying. Current status: {doc.status}"
         )
 
     try:
