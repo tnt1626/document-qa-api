@@ -47,7 +47,7 @@ TOOLS = [
                         "default": 5,
                     },
                 },
-                "required": ["query"],
+                "required": ["document_id", "query"],
             },
         },
     },
