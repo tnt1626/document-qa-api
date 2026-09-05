@@ -3,7 +3,7 @@ import logging
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import APIRouter, File, UploadFile, Depends, HTTPException, BackgroundTasks
-from app.services.rag.chunker import chunk_text
+from app.services.rag.chunker import chunk_by_sentences
 from app.services.rag.embedder import embed_text
 from app.models import Document, Chunk, FileStatus
 from app.database import get_db, SessionLocal, update_doc_status
@@ -24,10 +24,10 @@ logger = logging.getLogger(__name__)
 
 doc_router = APIRouter(prefix="/documents")
 
-async def upload(doc_id: uuid.UUID, content: str, chunk_size: int, overlap: int):
+async def upload(doc_id: uuid.UUID, content: str, max_chars: int, overlap_sentences: int):
     await update_doc_status(doc_id, FileStatus.PROCESSING)
     try:
-        chunks = chunk_text(content, chunk_size, overlap)
+        chunks = chunk_by_sentences(content, max_chars, overlap_sentences)
     except Exception as e:
         await update_doc_status(doc_id, FileStatus.FAILED)
         logger.error(f"Failed to chunk document {doc_id}: {e}")
@@ -53,8 +53,8 @@ async def upload(doc_id: uuid.UUID, content: str, chunk_size: int, overlap: int)
 @doc_router.post("/", response_model=DocumentUploadResponse)
 async def upload_document(
     background_tasks: BackgroundTasks,
-    chunk_size: int = 500,
-    overlap: int = 50,
+    max_chars: int = 500,
+    overlap_sentences: int = 1,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ):
@@ -86,8 +86,8 @@ async def upload_document(
         upload,
         doc_id=doc.id,
         content=text,
-        chunk_size=chunk_size,
-        overlap=overlap,
+        max_chars=max_chars,
+        overlap_sentences=overlap_sentences,
     )
     return DocumentUploadResponse.model_validate(doc)
 
